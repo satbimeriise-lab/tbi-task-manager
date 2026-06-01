@@ -3,7 +3,9 @@ FROM php:8.2-apache
 # System dependencies
 RUN apt-get update && apt-get install -y \
     git zip unzip libzip-dev libcurl4-openssl-dev \
-    && docker-php-ext-install zip curl \
+    libgd-dev libpng-dev libjpeg-dev libfreetype6-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install zip curl gd \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install Composer
