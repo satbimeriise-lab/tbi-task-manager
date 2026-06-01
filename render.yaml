@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: tbi-mce-task-manager
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free          # Render free tier
+    envVars:
+      - key: SPREADSHEET_ID
+        sync: false     # Set manually in Render dashboard
+      - key: BASE_URL
+        value: ""
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: FROM_EMAIL
+        value: noreply@tbi-mce.ac.in

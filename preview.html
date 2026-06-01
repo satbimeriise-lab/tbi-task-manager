@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TBI-MCE Task Manager — Live Preview</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.7.1/dist/jspdf.plugin.autotable.min.js"></script>
+<style>
+/* ── Root ── */
+:root{
+  --tbi-primary:#0d2b5c; --tbi-secondary:#1565c0; --tbi-accent:#1976d2;
+  --tbi-light:#e8f0fe; --shadow:0 2px 12px rgba(13,43,92,.09);
+  --radius:12px; --font:'Inter',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);font-size:.9rem;background:#f0f4f8;min-height:100vh;transition:background .3s}
+[data-bs-theme="dark"]{--bs-body-bg:#0f1724;background:#0f1724 !important}
+[data-bs-theme="dark"] .card,[data-bs-theme="dark"] .stat-card,[data-bs-theme="dark"] .emp-card{background:#1a2235 !important}
+[data-bs-theme="dark"] .tbi-navbar{background:linear-gradient(135deg,#061428,#0d3175) !important}
+[data-bs-theme="dark"] .table-light{--bs-table-bg:rgba(255,255,255,.04)}
+[data-bs-theme="dark"] .card-header{background:rgba(255,255,255,.04) !important}
+
+/* ── Navbar ── */
+.tbi-navbar{background:linear-gradient(135deg,var(--tbi-primary),var(--tbi-secondary));box-shadow:0 2px 16px rgba(13,43,92,.4);position:sticky;top:0;z-index:1000;padding:.55rem 1.2rem}
+.tbi-navbar .nav-link{color:rgba(255,255,255,.85) !important;font-size:.82rem;font-weight:500;border-radius:6px;padding:.35rem .65rem;cursor:pointer;transition:.15s}
+.tbi-navbar .nav-link:hover,.tbi-navbar .nav-link.active{background:rgba(255,255,255,.18);color:#fff !important}
+.brand-text{line-height:1.2}
+.brand-main{font-size:.9rem;font-weight:700;color:#fff}
+.brand-sub{font-size:.6rem;opacity:.75;color:#fff}
+.avatar-sm{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem;color:#fff;flex-shrink:0}
+
+/* ── Pages ── */
+.page{display:none;animation:fadeIn .25s ease}
+.page.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.content-wrap{padding:1.5rem 1.25rem;min-height:calc(100vh - 60px)}
+
+/* ── Stat Cards ── */
+.stat-card{background:#fff;border-radius:var(--radius);padding:1rem 1.15rem;box-shadow:var(--shadow);transition:.2s;cursor:default}
+.stat-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(13,43,92,.13)}
+.stat-icon{font-size:1.35rem;margin-bottom:.25rem}
+.stat-val{font-size:1.55rem;font-weight:700;line-height:1.1}
+.stat-lbl{font-size:.68rem;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-top:.2rem}
+
+/* ── Employee Cards ── */
+.emp-card{background:#fff;border-radius:var(--radius);padding:1.2rem;box-shadow:var(--shadow);cursor:pointer;transition:.2s;border:2px solid transparent;height:100%}
+.emp-card:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(13,43,92,.16);border-color:var(--tbi-secondary)}
+.emp-avatar{width:52px;height:52px;border-radius:50%;object-fit:cover;flex-shrink:0}
+.emp-avatar-init{width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--tbi-primary),var(--tbi-accent));color:#fff;font-size:1rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.emp-name{font-weight:700;font-size:.93rem}
+.emp-desig{font-size:.73rem;color:#777;margin-top:.1rem}
+
+/* ── Misc ── */
+.card{border-radius:var(--radius) !important;overflow:hidden;box-shadow:var(--shadow)}
+.card-header{background:var(--tbi-light);border-bottom:1px solid rgba(0,0,0,.06);padding:.7rem 1.15rem;font-size:.88rem}
+.btn{border-radius:8px !important;font-weight:500;font-size:.85rem}
+.btn-primary{background:linear-gradient(135deg,var(--tbi-primary),var(--tbi-secondary));border:none}
+.btn-primary:hover,.btn-primary:focus{background:linear-gradient(135deg,#0b2450,#1251a3);border:none}
+.badge{font-size:.68rem;font-weight:600;padding:.28em .55em;border-radius:5px !important}
+.progress{border-radius:99px;height:6px;background:rgba(13,43,92,.08)}
+.progress-bar{border-radius:99px;transition:width .6s ease}
+.table{font-size:.84rem}
+.table th{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.page-title{font-weight:700;font-size:1.15rem;margin-bottom:.2rem}
+.page-subtitle{font-size:.78rem;color:#888}
+.status-tag{display:inline-flex;align-items:center;gap:.3rem;font-size:.72rem;font-weight:600;padding:.25em .55em;border-radius:5px}
+.overdue-row{background:rgba(220,53,69,.07) !important}
+footer{background:var(--tbi-light);border-top:1px solid rgba(0,0,0,.07);padding:.7rem;text-align:center;color:#888;font-size:.75rem;margin-top:2rem}
+
+/* ── Login page ── */
+.login-wrap{min-height:100vh;background:linear-gradient(135deg,#0d2b5c 0%,#1565c0 60%,#1976d2 100%);display:flex;align-items:center;justify-content:center;padding:1rem}
+.login-card{width:100%;max-width:440px}
+.login-header{background:rgba(0,0,0,.25);border-radius:16px 16px 0 0;padding:2rem;text-align:center;backdrop-filter:blur(6px)}
+.login-body{background:#fff;border-radius:0 0 16px 16px;padding:2rem}
+[data-bs-theme="dark"] .login-body{background:#1a2235}
+.logo-circle{width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;border:3px solid rgba(255,255,255,.3);font-size:1.8rem;font-weight:900;color:#fff}
+
+/* ── Notif ── */
+.notif-dot{width:8px;height:8px;background:#dc3545;border-radius:50%;position:absolute;top:4px;right:4px}
+.notif-item{padding:.5rem .75rem;border-bottom:1px solid rgba(0,0,0,.06);font-size:.8rem;cursor:pointer;transition:.15s}
+.notif-item:hover{background:var(--tbi-light)}
+.notif-item.unread{font-weight:600;background:rgba(21,101,192,.05)}
+
+/* ── Approval card ── */
+.approval-card{border-left:4px solid #ffc107 !important}
+
+/* ── Responsive ── */
+@media(max-width:576px){.stat-val{font-size:1.2rem}.content-wrap{padding:.85rem}}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     LOGIN PAGE
+═══════════════════════════════════════════ -->
+<div id="loginPage" class="login-wrap">
+  <div class="login-card">
+    <div class="login-header">
+      <div class="logo-circle">TBI</div>
+      <h4 style="color:#fff;font-weight:700;margin-bottom:.25rem">TBI – MCE Hassan</h4>
+      <div style="color:rgba(255,255,255,.75);font-size:.8rem">Technology Business Incubator</div>
+      <div style="color:rgba(255,255,255,.55);font-size:.7rem">Malnad College of Engineering</div>
+    </div>
+    <div class="login-body">
+      <h5 style="text-align:center;font-weight:600;margin-bottom:1.5rem">Sign In to Task Manager</h5>
+
+      <div id="loginError" class="alert alert-danger py-2 d-none small"></div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Username</label>
+        <div class="input-group">
+          <span class="input-group-text" style="background:#e8f0fe;border-color:#dee2e6"><i class="bi bi-person"></i></span>
+          <input type="text" class="form-control" id="loginUser" placeholder="Enter username" value="admin">
+        </div>
+      </div>
+      <div class="mb-4">
+        <label class="form-label fw-semibold">Password</label>
+        <div class="input-group">
+          <span class="input-group-text" style="background:#e8f0fe;border-color:#dee2e6"><i class="bi bi-lock"></i></span>
+          <input type="password" class="form-control" id="loginPass" placeholder="Enter password" value="Admin@123" id="pwdField">
+          <button class="btn btn-outline-secondary" onclick="togglePwd()" type="button"><i class="bi bi-eye" id="pwdEye"></i></button>
+        </div>
+      </div>
+      <button class="btn btn-primary w-100 py-2 fw-semibold" onclick="doLogin()">
+        <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+      </button>
+      <div style="text-align:center;margin-top:.75rem">
+        <a href="#" style="font-size:.8rem;color:var(--tbi-secondary)">Forgot password?</a>
+      </div>
+      <hr style="margin:1rem 0">
+      <div class="alert alert-info py-2 small mb-0">
+        <strong>Demo Credentials:</strong><br>
+        Admin: <code>admin</code> / <code>Admin@123</code>&nbsp;&nbsp;
+        Employee: <code>darshan</code> / <code>Employee@123</code>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     MAIN APP (hidden until login)
+═══════════════════════════════════════════ -->
+<div id="appShell" style="display:none">
+
+<!-- NAVBAR -->
+<nav class="tbi-navbar d-flex align-items-center justify-content-between flex-wrap gap-2">
+  <a class="d-flex align-items-center gap-2 text-decoration-none" onclick="showPage('adminDash')" style="cursor:pointer">
+    <div style="width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;font-size:.9rem;flex-shrink:0">TBI</div>
+    <div class="brand-text d-none d-sm-block">
+      <div class="brand-main">TBI – MCE Hassan</div>
+      <div class="brand-sub">Task Manager</div>
+    </div>
+  </a>
+
+  <div class="d-flex align-items-center gap-1 flex-wrap" id="adminNav">
+    <a class="nav-link" onclick="showPage('adminDash')"><i class="bi bi-grid me-1"></i>Dashboard</a>
+    <a class="nav-link" onclick="showPage('taskList')"><i class="bi bi-list-task me-1"></i>Tasks</a>
+    <a class="nav-link" onclick="showPage('empList')"><i class="bi bi-people me-1"></i>Employees</a>
+    <a class="nav-link" onclick="showPage('approvals')"><i class="bi bi-check2-circle me-1"></i>Approvals <span class="badge bg-danger ms-1">2</span></a>
+    <a class="nav-link" onclick="showPage('analytics')"><i class="bi bi-bar-chart me-1"></i>Analytics</a>
+    <a class="nav-link" onclick="showPage('reports')"><i class="bi bi-file-earmark-bar-graph me-1"></i>Reports</a>
+  </div>
+
+  <div class="d-none" id="empNav">
+    <a class="nav-link" onclick="showPage('empDash')"><i class="bi bi-grid me-1"></i>Dashboard</a>
+    <a class="nav-link" onclick="showPage('myTasks')"><i class="bi bi-list-task me-1"></i>My Tasks</a>
+    <a class="nav-link" onclick="showPage('profile')"><i class="bi bi-person me-1"></i>Profile</a>
+  </div>
+
+  <div class="d-flex align-items-center gap-2">
+    <!-- Notif Bell -->
+    <div class="position-relative" style="cursor:pointer" onclick="toggleNotif()">
+      <i class="bi bi-bell-fill" style="color:#fff;font-size:1.1rem"></i>
+      <div class="notif-dot" id="notifDot"></div>
+    </div>
+
+    <!-- Dark toggle -->
+    <button class="btn btn-sm btn-outline-light" onclick="toggleDark()" style="border-color:rgba(255,255,255,.3);padding:.25rem .5rem">
+      <i class="bi bi-moon-fill" id="themeIcon"></i>
+    </button>
+
+    <!-- User dropdown -->
+    <div class="dropdown">
+      <div class="d-flex align-items-center gap-2" data-bs-toggle="dropdown" style="cursor:pointer">
+        <div class="avatar-sm" id="userInitials">GK</div>
+        <span style="color:#fff;font-size:.82rem;font-weight:500" id="userNameNav">Dr. Geetha Kiran A</span>
+        <i class="bi bi-chevron-down" style="color:rgba(255,255,255,.6);font-size:.65rem"></i>
+      </div>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><span class="dropdown-item-text small text-muted" id="userRoleNav">CEO – Admin</span></li>
+        <li><hr class="dropdown-divider my-1"></li>
+        <li><a class="dropdown-item text-danger" onclick="doLogout()"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<!-- Notification Panel -->
+<div id="notifPanel" style="display:none;position:fixed;top:62px;right:16px;width:300px;background:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.18);z-index:9999;overflow:hidden">
+  <div style="padding:.6rem 1rem;background:var(--tbi-light);font-weight:600;font-size:.85rem;border-bottom:1px solid #e9ecef">
+    <i class="bi bi-bell me-2"></i>Notifications
+    <span onclick="toggleNotif()" style="float:right;cursor:pointer;color:#888"><i class="bi bi-x-lg"></i></span>
+  </div>
+  <div class="notif-item unread"><i class="bi bi-list-task text-primary me-2"></i>New task assigned: <b>Monthly Budget Report</b><br><small class="text-muted">2 min ago</small></div>
+  <div class="notif-item unread"><i class="bi bi-check2-circle text-success me-2"></i>Task Approved: Cloud Hosting Setup<br><small class="text-muted">1 hour ago</small></div>
+  <div class="notif-item"><i class="bi bi-clock text-warning me-2"></i>Deadline tomorrow: Fix Login Bug<br><small class="text-muted">3 hours ago</small></div>
+  <div class="notif-item"><i class="bi bi-exclamation-circle text-danger me-2"></i>Overdue: Process Grant Applications<br><small class="text-muted">Yesterday</small></div>
+  <div style="padding:.5rem;text-align:center"><a href="#" style="font-size:.78rem;color:var(--tbi-secondary)">View all notifications</a></div>
+</div>
+
+<!-- ─────────────────────────────────────────
+     PAGES
+───────────────────────────────────────── -->
+<div class="content-wrap">
+
+<!-- ▌ ADMIN DASHBOARD ▌ -->
+<div class="page active" id="pg-adminDash">
+  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+      <div class="page-title"><i class="bi bi-grid-fill me-2 text-primary"></i>Admin Dashboard</div>
+      <div class="page-subtitle">Welcome back, Dr. Geetha Kiran A &bull; Sunday, 01 June 2025</div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary btn-sm" onclick="showPage('createTask')"><i class="bi bi-plus-circle me-1"></i>New Task</button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="showPage('reports')"><i class="bi bi-file-earmark-bar-graph me-1"></i>Reports</button>
+    </div>
+  </div>
+
+  <!-- KPI Row -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-sm-4 col-lg-2"><div class="stat-card border-start border-primary border-4"><div class="stat-icon text-primary"><i class="bi bi-list-task"></i></div><div class="stat-val">14</div><div class="stat-lbl">Total Tasks</div></div></div>
+    <div class="col-6 col-sm-4 col-lg-2"><div class="stat-card border-start border-success border-4"><div class="stat-icon text-success"><i class="bi bi-check2-all"></i></div><div class="stat-val">4</div><div class="stat-lbl">Approved</div></div></div>
+    <div class="col-6 col-sm-4 col-lg-2"><div class="stat-card border-start border-info border-4"><div class="stat-icon text-info"><i class="bi bi-hourglass-split"></i></div><div class="stat-val">6</div><div class="stat-lbl">Completed</div></div></div>
+    <div class="col-6 col-sm-4 col-lg-2"><div class="stat-card border-start border-warning border-4"><div class="stat-icon text-warning"><i class="bi bi-clock"></i></div><div class="stat-val">6</div><div class="stat-lbl">Pending</div></div></div>
+    <div class="col-6 col-sm-4 col-lg-2"><div class="stat-card border-start border-danger border-4"><div class="stat-icon text-danger"><i class="bi bi-exclamation-triangle"></i></div><div class="stat-val">3</div><div class="stat-lbl">Overdue</div></div></div>
+    <div class="col-6 col-sm-4 col-lg-2"><a onclick="showPage('approvals')" style="text-decoration:none"><div class="stat-card border-start border-4" style="border-color:#6f42c1!important"><div class="stat-icon" style="color:#6f42c1"><i class="bi bi-bell"></i></div><div class="stat-val">2</div><div class="stat-lbl">Pending Approvals <span class="badge bg-danger">!</span></div></div></a></div>
+  </div>
+
+  <!-- Employee Cards -->
+  <h5 style="font-weight:700;margin-bottom:1rem"><i class="bi bi-people-fill me-2 text-primary"></i>Employee Overview</h5>
+  <div class="row g-3 mb-4" id="empCards"></div>
+
+  <!-- Charts -->
+  <div class="row g-3 mb-4">
+    <div class="col-lg-4">
+      <div class="card border-0"><div class="card-header fw-semibold">Task Distribution</div>
+      <div class="card-body d-flex align-items-center justify-content-center" style="height:230px"><canvas id="distChart"></canvas></div></div>
+    </div>
+    <div class="col-lg-8">
+      <div class="card border-0"><div class="card-header fw-semibold">Employee Performance</div>
+      <div class="card-body" style="height:230px"><canvas id="perfChart"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- Recent Tasks table -->
+  <div class="card border-0 mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span class="fw-semibold"><i class="bi bi-clock-history me-2"></i>Recent Tasks</span>
+      <button class="btn btn-sm btn-outline-primary" onclick="showPage('taskList')">View All</button>
+    </div>
+    <div class="card-body p-0"><div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light"><tr><th>Task</th><th>Employee</th><th>Priority</th><th>Deadline</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="recentTasksTbody"></tbody>
+      </table>
+    </div></div>
+  </div>
+</div>
+
+<!-- ▌ TASK LIST ▌ -->
+<div class="page" id="pg-taskList">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div class="page-title"><i class="bi bi-list-task me-2 text-primary"></i>Task Management</div>
+    <button class="btn btn-primary btn-sm" onclick="showPage('createTask')"><i class="bi bi-plus-circle me-1"></i>Create Task</button>
+  </div>
+
+  <!-- Filters -->
+  <div class="card border-0 mb-3"><div class="card-body">
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-sm-6 col-lg-3"><input type="text" class="form-control form-control-sm" id="taskSearch" placeholder="Search tasks…" oninput="filterTasks()"></div>
+      <div class="col-6 col-sm-4 col-lg-2"><select class="form-select form-select-sm" id="fEmp" onchange="filterTasks()"><option value="">All Employees</option><option>Dr. Geetha Kiran A</option><option>Dr. Mohana Lakshmi J</option><option>Mr. Darshan H D</option><option>Miss. Ramya K V</option><option>Ms. Madhurya H V</option><option>Ms. Deeksha M S</option></select></div>
+      <div class="col-6 col-sm-4 col-lg-2"><select class="form-select form-select-sm" id="fStatus" onchange="filterTasks()"><option value="">All Status</option><option>Pending</option><option>In Progress</option><option>Completed</option><option>Approved</option><option>Rejected</option></select></div>
+      <div class="col-6 col-sm-4 col-lg-2"><select class="form-select form-select-sm" id="fPriority" onchange="filterTasks()"><option value="">All Priority</option><option>High</option><option>Medium</option><option>Low</option></select></div>
+      <div class="col-auto d-flex gap-2">
+        <button class="btn btn-sm btn-primary" onclick="filterTasks()">Filter</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="clearFilters()">Clear</button>
+      </div>
+    </div>
+  </div></div>
+
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <small class="text-muted" id="taskCount">Showing 14 of 14 tasks</small>
+    <div class="d-flex gap-2">
+      <button class="btn btn-sm btn-outline-success" onclick="exportTableExcel('fullTaskTable','TBI_Tasks')"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
+      <button class="btn btn-sm btn-outline-danger" onclick="exportTablePDF('fullTaskTable','Task Report')"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</button>
+    </div>
+  </div>
+
+  <div class="card border-0"><div class="card-body p-0"><div class="table-responsive">
+    <table class="table table-hover mb-0" id="fullTaskTable">
+      <thead class="table-light"><tr><th>#</th><th>Task Title</th><th>Employee</th><th>Priority</th><th>Assigned</th><th>Deadline</th><th>Days Pending</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="fullTasksTbody"></tbody>
+    </table>
+  </div></div></div>
+</div>
+
+<!-- ▌ CREATE TASK ▌ -->
+<div class="page" id="pg-createTask">
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <button class="btn btn-sm btn-outline-secondary" onclick="showPage('taskList')"><i class="bi bi-arrow-left"></i></button>
+    <div class="page-title"><i class="bi bi-plus-circle me-2 text-primary"></i>Create New Task</div>
+  </div>
+  <div class="row justify-content-center"><div class="col-12 col-lg-8">
+    <div class="card border-0"><div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12"><label class="form-label fw-semibold">Assign To *</label>
+          <select class="form-select"><option>Select Employee…</option><option>Dr. Geetha Kiran A — CEO</option><option>Dr. Mohana Lakshmi J — COO</option><option selected>Mr. Darshan H D — Software Associate</option><option>Miss. Ramya K V — Finance Associate</option><option>Ms. Madhurya H V — Innovation Associate</option><option>Ms. Deeksha M S — Supporting Staff</option></select></div>
+        <div class="col-12"><label class="form-label fw-semibold">Task Title *</label><input type="text" class="form-control" placeholder="Enter task title" value="Develop Mobile App Prototype"></div>
+        <div class="col-12"><label class="form-label fw-semibold">Description</label><textarea class="form-control" rows="3" placeholder="Detailed description…">Design and develop a mobile app prototype for the TBI startup showcase event scheduled for July 2025.</textarea></div>
+        <div class="col-6 col-md-4"><label class="form-label fw-semibold">Priority</label><select class="form-select"><option>High</option><option selected>Medium</option><option>Low</option></select></div>
+        <div class="col-6 col-md-4"><label class="form-label fw-semibold">Start Date</label><input type="date" class="form-control" value="2025-06-01"></div>
+        <div class="col-6 col-md-4"><label class="form-label fw-semibold">Deadline *</label><input type="date" class="form-control" value="2025-06-15"></div>
+        <div class="col-12"><label class="form-label fw-semibold">Attachment</label><input type="file" class="form-control"><div class="form-text">Max 10 MB. PDF, DOC, DOCX, XLS, PNG, JPG, ZIP</div></div>
+      </div>
+      <div class="d-flex gap-3 mt-4">
+        <button class="btn btn-primary px-4" onclick="alert('Task created! (Demo — in production this saves to Google Sheets)')"><i class="bi bi-plus-circle me-2"></i>Create Task</button>
+        <button class="btn btn-outline-secondary" onclick="showPage('taskList')">Cancel</button>
+      </div>
+    </div></div>
+  </div></div>
+</div>
+
+<!-- ▌ EMPLOYEE LIST ▌ -->
+<div class="page" id="pg-empList">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="page-title"><i class="bi bi-people-fill me-2 text-primary"></i>Employee Management</div>
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addEmpModal"><i class="bi bi-person-plus me-1"></i>Add Employee</button>
+  </div>
+  <div class="row g-3" id="empMgmtCards"></div>
+</div>
+
+<!-- ▌ APPROVALS ▌ -->
+<div class="page" id="pg-approvals">
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <div class="page-title"><i class="bi bi-check2-circle me-2 text-primary"></i>Approval Workflow <span class="badge bg-danger">2 pending</span></div>
+  </div>
+
+  <h5 style="font-weight:600;color:#e0a800;margin-bottom:1rem"><i class="bi bi-clock me-2"></i>Awaiting Review (2)</h5>
+  <div class="row g-3 mb-4">
+    <!-- Approval Card 1 -->
+    <div class="col-12 col-md-6 col-xl-4">
+      <div class="card border-0 approval-card h-100"><div class="card-body">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <div class="emp-avatar-init" style="width:42px;height:42px;font-size:.82rem">DH</div>
+          <div><div style="font-weight:600">Mr. Darshan H D</div><div style="font-size:.72rem;color:#888">Software Associate</div></div>
+          <span class="badge bg-danger ms-auto">High</span>
+        </div>
+        <div style="font-weight:600;margin-bottom:.3rem">Fix Login Page Bug</div>
+        <div style="font-size:.8rem;color:#666;margin-bottom:.75rem">Debug and resolve authentication issue on login page reported by users</div>
+        <div class="d-flex gap-3 mb-3" style="font-size:.78rem;color:#888">
+          <span><i class="bi bi-calendar me-1"></i>Deadline: 01 Jun 2025</span>
+          <span><i class="bi bi-clock me-1"></i>Submitted: Today</span>
+        </div>
+        <div style="font-size:.8rem;color:#555;background:#f8f9fa;padding:.5rem .7rem;border-radius:8px;margin-bottom:.75rem">
+          <i class="bi bi-chat-text me-1"></i><strong>Notes:</strong> Fixed JWT token expiry issue. Tested on Chrome, Firefox & mobile.
+        </div>
+        <textarea class="form-control form-control-sm mb-2" rows="2" placeholder="Review comments (optional)…"></textarea>
+        <div class="d-flex gap-2">
+          <button class="btn btn-success btn-sm flex-fill" onclick="approveTask(this,'Fix Login Page Bug')"><i class="bi bi-check2 me-1"></i>Approve</button>
+          <button class="btn btn-danger btn-sm flex-fill" onclick="rejectTask(this)"><i class="bi bi-x me-1"></i>Reject</button>
+        </div>
+      </div></div>
+    </div>
+    <!-- Approval Card 2 -->
+    <div class="col-12 col-md-6 col-xl-4">
+      <div class="card border-0 approval-card h-100"><div class="card-body">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <div class="emp-avatar-init" style="width:42px;height:42px;font-size:.82rem;background:linear-gradient(135deg,#6f42c1,#9b59b6)">MH</div>
+          <div><div style="font-weight:600">Ms. Madhurya H V</div><div style="font-size:.72rem;color:#888">Innovation Associate</div></div>
+          <span class="badge bg-warning text-dark ms-auto">Medium</span>
+        </div>
+        <div style="font-weight:600;margin-bottom:.3rem">Startup Mentoring Sessions</div>
+        <div style="font-size:.8rem;color:#666;margin-bottom:.75rem">Conducted weekly mentoring sessions for 3 portfolio startups</div>
+        <div class="d-flex gap-3 mb-3" style="font-size:.78rem;color:#888">
+          <span><i class="bi bi-calendar me-1"></i>Deadline: 01 Jun 2025</span>
+          <span><i class="bi bi-clock me-1"></i>Submitted: Today</span>
+        </div>
+        <div style="font-size:.8rem;color:#555;background:#f8f9fa;padding:.5rem .7rem;border-radius:8px;margin-bottom:.75rem">
+          <i class="bi bi-chat-text me-1"></i><strong>Notes:</strong> Sessions completed. Progress reports uploaded to shared drive.
+        </div>
+        <textarea class="form-control form-control-sm mb-2" rows="2" placeholder="Review comments (optional)…"></textarea>
+        <div class="d-flex gap-2">
+          <button class="btn btn-success btn-sm flex-fill" onclick="approveTask(this,'Startup Mentoring Sessions')"><i class="bi bi-check2 me-1"></i>Approve</button>
+          <button class="btn btn-danger btn-sm flex-fill" onclick="rejectTask(this)"><i class="bi bi-x me-1"></i>Reject</button>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- Approval History -->
+  <h5 style="font-weight:600;margin-bottom:1rem"><i class="bi bi-clock-history me-2"></i>Approval History</h5>
+  <div class="card border-0"><div class="card-body p-0"><div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light"><tr><th>Employee</th><th>Task</th><th>Submitted</th><th>Reviewed By</th><th>Decision</th><th>Comments</th><th>Date</th></tr></thead>
+      <tbody>
+        <tr><td><div style="font-weight:500;font-size:.83rem">Mr. Darshan H D</div><div style="font-size:.7rem;color:#888">Software Associate</div></td><td style="font-size:.83rem">Setup Cloud Hosting</td><td style="font-size:.8rem">22 May 2025</td><td style="font-size:.8rem">Dr. Geetha Kiran A</td><td><span class="badge bg-success">Approved</span></td><td style="font-size:.78rem;color:#666">Excellent work! Deployment is clean.</td><td style="font-size:.8rem">22 May 2025</td></tr>
+        <tr><td><div style="font-weight:500;font-size:.83rem">Miss. Ramya K V</div><div style="font-size:.7rem;color:#888">Finance Associate</div></td><td style="font-size:.83rem">Vendor Payment Processing</td><td style="font-size:.8rem">25 May 2025</td><td style="font-size:.8rem">Dr. Geetha Kiran A</td><td><span class="badge bg-success">Approved</span></td><td style="font-size:.78rem;color:#666">Payments processed correctly.</td><td style="font-size:.8rem">25 May 2025</td></tr>
+        <tr><td><div style="font-weight:500;font-size:.83rem">Ms. Madhurya H V</div><div style="font-size:.7rem;color:#888">Innovation Associate</div></td><td style="font-size:.83rem">Research Report on AI Startups</td><td style="font-size:.8rem">19 May 2025</td><td style="font-size:.8rem">Dr. Mohana Lakshmi J</td><td><span class="badge bg-danger">Rejected</span></td><td style="font-size:.78rem;color:#666">Needs more data. Add case studies.</td><td style="font-size:.8rem">20 May 2025</td></tr>
+        <tr><td><div style="font-weight:500;font-size:.83rem">Dr. Mohana Lakshmi J</div><div style="font-size:.7rem;color:#888">COO</div></td><td style="font-size:.83rem">Policy Documentation Update</td><td style="font-size:.8rem">25 May 2025</td><td style="font-size:.8rem">Dr. Geetha Kiran A</td><td><span class="badge bg-success">Approved</span></td><td style="font-size:.78rem;color:#666">Documentation looks comprehensive.</td><td style="font-size:.8rem">26 May 2025</td></tr>
+      </tbody>
+    </table>
+  </div></div></div>
+</div>
+
+<!-- ▌ ANALYTICS ▌ -->
+<div class="page" id="pg-analytics">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="page-title"><i class="bi bi-bar-chart-fill me-2 text-primary"></i>Analytics Dashboard</div>
+    <span style="font-size:.78rem;color:#888">Real-time data from Google Sheets</span>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-2"><div class="stat-card border-start border-primary border-4 text-center"><div class="stat-val text-primary">14</div><div class="stat-lbl">Total Tasks</div></div></div>
+    <div class="col-6 col-lg-2"><div class="stat-card border-start border-success border-4 text-center"><div class="stat-val text-success">4</div><div class="stat-lbl">Approved</div></div></div>
+    <div class="col-6 col-lg-2"><div class="stat-card border-start border-info border-4 text-center"><div class="stat-val text-info">6</div><div class="stat-lbl">Completed</div></div></div>
+    <div class="col-6 col-lg-2"><div class="stat-card border-start border-warning border-4 text-center"><div class="stat-val text-warning">6</div><div class="stat-lbl">Pending</div></div></div>
+    <div class="col-6 col-lg-2"><div class="stat-card border-start border-danger border-4 text-center"><div class="stat-val text-danger">3</div><div class="stat-lbl">Overdue</div></div></div>
+    <div class="col-6 col-lg-2"><div class="stat-card border-start border-4 text-center" style="border-color:#6f42c1!important"><div class="stat-val" style="color:#6f42c1">29%</div><div class="stat-lbl">Approval Rate</div></div></div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-lg-8"><div class="card border-0"><div class="card-header fw-semibold">Monthly Task Productivity (Last 6 Months)</div><div class="card-body" style="height:270px"><canvas id="monthlyChart"></canvas></div></div></div>
+    <div class="col-lg-4"><div class="card border-0"><div class="card-header fw-semibold">Priority Breakdown</div><div class="card-body d-flex align-items-center" style="height:270px"><canvas id="priorityChart"></canvas></div></div></div>
+  </div>
+  <div class="row g-3 mb-4">
+    <div class="col-lg-6"><div class="card border-0"><div class="card-header fw-semibold">Status Distribution</div><div class="card-body d-flex align-items-center" style="height:250px"><canvas id="statusChart"></canvas></div></div></div>
+    <div class="col-lg-6"><div class="card border-0"><div class="card-header fw-semibold">Employee Task Load</div><div class="card-body" style="height:250px"><canvas id="empLoadChart"></canvas></div></div></div>
+  </div>
+
+  <!-- Ranking -->
+  <div class="card border-0"><div class="card-header fw-semibold"><i class="bi bi-trophy me-2" style="color:#ffc107"></i>Employee Performance Ranking</div>
+  <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover mb-0">
+    <thead class="table-light"><tr><th>#</th><th>Employee</th><th>Designation</th><th>Total</th><th>Completed</th><th>Pending</th><th>Overdue</th><th>Approval %</th></tr></thead>
+    <tbody>
+      <tr><td>🥇</td><td class="fw-semibold">Mr. Darshan H D</td><td style="color:#888;font-size:.8rem">Software Associate</td><td>3</td><td class="text-success">3</td><td class="text-warning">0</td><td>0</td><td><div class="d-flex align-items-center gap-2"><div class="progress flex-fill"><div class="progress-bar bg-success" style="width:67%"></div></div><span style="font-size:.8rem;font-weight:600">67%</span></div></td></tr>
+      <tr><td>🥈</td><td class="fw-semibold">Dr. Mohana Lakshmi J</td><td style="color:#888;font-size:.8rem">COO</td><td>2</td><td class="text-success">2</td><td class="text-warning">0</td><td>0</td><td><div class="d-flex align-items-center gap-2"><div class="progress flex-fill"><div class="progress-bar bg-success" style="width:50%"></div></div><span style="font-size:.8rem;font-weight:600">50%</span></div></td></tr>
+      <tr><td>🥉</td><td class="fw-semibold">Miss. Ramya K V</td><td style="color:#888;font-size:.8rem">Finance Associate</td><td>3</td><td class="text-success">1</td><td class="text-warning">2</td><td class="text-danger fw-semibold">1</td><td><div class="d-flex align-items-center gap-2"><div class="progress flex-fill"><div class="progress-bar bg-success" style="width:33%"></div></div><span style="font-size:.8rem;font-weight:600">33%</span></div></td></tr>
+      <tr><td>4</td><td class="fw-semibold">Dr. Geetha Kiran A</td><td style="color:#888;font-size:.8rem">CEO</td><td>2</td><td class="text-success">0</td><td class="text-warning">2</td><td>0</td><td><div class="d-flex align-items-center gap-2"><div class="progress flex-fill"><div class="progress-bar bg-danger" style="width:0%"></div></div><span style="font-size:.8rem;font-weight:600">0%</span></div></td></tr>
+      <tr><td>5</td><td class="fw-semibold">Ms. Madhurya H V</td><td style="color:#888;font-size:.8rem">Innovation Associate</td><td>3</td><td class="text-success">1</td><td class="text-warning">1</td><td>1</td><td><div class="d-flex align-items-center gap-2"><div class="progress flex-fill"><div class="progress-bar bg-warning" style="width:0%"></div></div><span style="font-size:.8rem;font-weight:600">0%</span></div></td></tr>
+      <tr><td>6</td><td class="fw-semibold">Ms. Deeksha M S</td><td style="color:#888;font-size:.8rem">Supporting Staff</td><td>2</td><td class="text-success">0</td><td class="text-warning">2</td><td class="text-danger fw-semibold">1</td><td><div class="d-flex align-items-center gap-2"><div class="progress flex-fill"><div class="progress-bar bg-danger" style="width:0%"></div></div><span style="font-size:.8rem;font-weight:600">0%</span></div></td></tr>
+    </tbody>
+  </table></div></div></div>
+</div>
+
+<!-- ▌ REPORTS ▌ -->
+<div class="page" id="pg-reports">
+  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div class="page-title"><i class="bi bi-file-earmark-bar-graph me-2 text-primary"></i>Reports</div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-success btn-sm" onclick="exportTableExcel('reportDetailTable','TBI_Report')"><i class="bi bi-file-earmark-excel me-1"></i>Export Excel</button>
+      <button class="btn btn-outline-danger btn-sm" onclick="exportTablePDF('reportDetailTable','Monthly Task Report')"><i class="bi bi-file-earmark-pdf me-1"></i>Export PDF</button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+    </div>
+  </div>
+
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    <button class="btn btn-sm btn-primary">Daily</button>
+    <button class="btn btn-sm btn-outline-secondary">Weekly</button>
+    <button class="btn btn-sm btn-outline-secondary" id="monthlyReportBtn">Monthly</button>
+    <button class="btn btn-sm btn-outline-secondary">Custom Range</button>
+    <button class="btn btn-sm btn-outline-secondary">Pending Tasks</button>
+    <button class="btn btn-sm btn-outline-secondary">Employee Productivity</button>
+  </div>
+
+  <!-- Summary Stats -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-2 text-center"><div class="stat-card"><div class="stat-val text-primary">14</div><div class="stat-lbl">Total Tasks</div></div></div>
+    <div class="col-6 col-md-2 text-center"><div class="stat-card"><div class="stat-val text-success">4</div><div class="stat-lbl">Approved</div></div></div>
+    <div class="col-6 col-md-2 text-center"><div class="stat-card"><div class="stat-val text-info">6</div><div class="stat-lbl">Completed</div></div></div>
+    <div class="col-6 col-md-2 text-center"><div class="stat-card"><div class="stat-val text-warning">6</div><div class="stat-lbl">Pending</div></div></div>
+    <div class="col-6 col-md-2 text-center"><div class="stat-card"><div class="stat-val text-danger">3</div><div class="stat-lbl">Overdue</div></div></div>
+    <div class="col-6 col-md-2 text-center"><div class="stat-card"><div class="stat-val" style="color:#6f42c1">29%</div><div class="stat-lbl">Approval Rate</div></div></div>
+  </div>
+
+  <div class="card border-0"><div class="card-body p-0"><div class="table-responsive">
+    <table class="table table-bordered table-sm mb-0" id="reportDetailTable">
+      <thead class="table-primary"><tr><th>#</th><th>Task</th><th>Employee</th><th>Priority</th><th>Assigned</th><th>Deadline</th><th>Days Pending</th><th>Status</th><th>Assigned By</th></tr></thead>
+      <tbody id="reportTbody"></tbody>
+    </table>
+  </div></div></div>
+</div>
+
+<!-- ▌ EMPLOYEE DASHBOARD (employee view) ▌ -->
+<div class="page" id="pg-empDash">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <div class="page-title"><i class="bi bi-grid me-2 text-primary"></i>My Dashboard</div>
+      <div class="page-subtitle">Mr. Darshan H D &bull; Software Associate &bull; Sunday, 01 June 2025</div>
+    </div>
+  </div>
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-sm-4 col-lg-2"><div class="stat-card border-start border-primary border-4 text-center"><div class="stat-val text-primary">3</div><div class="stat-lbl">Total Tasks</div></div></div>
+    <div class="col-6 col-sm-4 col-lg-2"><div class="stat-card border-start border-success border-4 text-center"><div class="stat-val text-success">1</div><div class="stat-lbl">Approved</div></div></div>
+    <div class="col-6 col-sm-4 col-lg-2"><div class="stat-card border-start border-info border-4 text-center"><div class="stat-val text-info">2</div><div class="stat-lbl">Completed</div></div></div>
+    <div class="col-6 col-sm-4 col-lg-2"><div class="stat-card border-start border-warning border-4 text-center"><div class="stat-val text-warning">1</div><div class="stat-lbl">Pending</div></div></div>
+    <div class="col-6 col-sm-4 col-lg-2"><div class="stat-card border-start border-danger border-4 text-center"><div class="stat-val text-danger">0</div><div class="stat-lbl">Overdue</div></div></div>
+    <div class="col-6 col-sm-4 col-lg-2"><div class="stat-card border-start border-4 text-center" style="border-color:#6f42c1!important"><div class="stat-val" style="color:#6f42c1">67%</div><div class="stat-lbl">Approval %</div></div></div>
+  </div>
+  <div class="row g-3 mb-4">
+    <div class="col-md-4"><div class="card border-0"><div class="card-header fw-semibold">Task Overview</div><div class="card-body d-flex align-items-center justify-content-center" style="height:190px"><canvas id="myTaskChart"></canvas></div></div></div>
+    <div class="col-md-8"><div class="card border-0 h-100"><div class="card-header d-flex justify-content-between align-items-center"><span class="fw-semibold"><i class="bi bi-exclamation-circle text-danger me-2"></i>Priority Tasks</span><button class="btn btn-sm btn-outline-primary" onclick="showPage('myTasks')">View All</button></div>
+      <div class="list-group list-group-flush">
+        <div class="list-group-item d-flex align-items-center gap-3 py-2 px-3"><div class="flex-fill"><div style="font-weight:500;font-size:.85rem">Develop TBI Website Homepage</div><div class="d-flex gap-1 mt-1"><span class="badge bg-danger">High</span><span class="badge bg-primary">In Progress</span></div></div><div style="font-size:.78rem;color:#888">15 Jun 2025</div></div>
+        <div class="list-group-item d-flex align-items-center gap-3 py-2 px-3"><div class="flex-fill"><div style="font-weight:500;font-size:.85rem">Fix Login Page Bug</div><div class="d-flex gap-1 mt-1"><span class="badge bg-danger">High</span><span class="badge bg-info text-dark">Completed</span></div></div><div style="font-size:.78rem;color:#888">01 Jun 2025</div></div>
+      </div>
+    </div></div>
+  </div>
+  <div class="card border-0"><div class="card-header fw-semibold"><i class="bi bi-bell me-2"></i>Notifications</div>
+    <div class="list-group list-group-flush">
+      <div class="list-group-item notif-item unread"><i class="bi bi-list-task text-primary me-2"></i>New task assigned: <b>Develop TBI Website Homepage</b><br><small style="color:#888">5 days ago</small></div>
+      <div class="list-group-item notif-item"><i class="bi bi-check2-circle text-success me-2"></i>Task Approved: Setup Cloud Hosting<br><small style="color:#888">8 days ago</small></div>
+    </div>
+  </div>
+</div>
+
+<!-- ▌ MY TASKS (employee) ▌ -->
+<div class="page" id="pg-myTasks">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="page-title"><i class="bi bi-list-task me-2 text-primary"></i>My Tasks</div>
+  </div>
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    <button class="btn btn-sm btn-primary">All <span class="badge bg-white text-primary ms-1">3</span></button>
+    <button class="btn btn-sm btn-outline-secondary">Pending <span class="badge bg-secondary ms-1">1</span></button>
+    <button class="btn btn-sm btn-outline-secondary">In Progress <span class="badge bg-secondary ms-1">1</span></button>
+    <button class="btn btn-sm btn-outline-secondary">Completed <span class="badge bg-secondary ms-1">1</span></button>
+    <button class="btn btn-sm btn-outline-secondary">Approved <span class="badge bg-secondary ms-1">1</span></button>
+    <button class="btn btn-sm btn-outline-secondary">Overdue <span class="badge bg-danger ms-1">0</span></button>
+  </div>
+  <div class="row g-3" id="myTaskCards"></div>
+</div>
+
+<!-- ▌ PROFILE ▌ -->
+<div class="page" id="pg-profile">
+  <div class="page-title mb-4"><i class="bi bi-person-circle me-2 text-primary"></i>My Profile</div>
+  <div class="row g-4">
+    <div class="col-md-4">
+      <div class="card border-0 text-center"><div class="card-body py-4">
+        <div class="emp-avatar-init mx-auto mb-3" style="width:90px;height:90px;font-size:1.6rem">DH</div>
+        <h5 style="font-weight:700">Mr. Darshan H D</h5>
+        <div style="color:#888;font-size:.85rem">Software Associate</div>
+        <div style="color:#888;font-size:.78rem;margin-top:.2rem">satbimeriise@mcehassan.ac.in</div>
+        <hr style="margin:1rem 0">
+        <div class="row g-2 text-center">
+          <div class="col-4"><div style="font-weight:700;color:var(--tbi-secondary)">3</div><div style="font-size:.68rem;color:#888">Total</div></div>
+          <div class="col-4"><div style="font-weight:700;color:#198754">1</div><div style="font-size:.68rem;color:#888">Approved</div></div>
+          <div class="col-4"><div style="font-weight:700;color:#6f42c1">67%</div><div style="font-size:.68rem;color:#888">Rate</div></div>
+        </div>
+        <div class="mt-3">
+          <div class="d-flex justify-content-between mb-1"><small style="color:#888">Approval Rate</small><small style="font-weight:600">67%</small></div>
+          <div class="progress"><div class="progress-bar bg-success" style="width:67%"></div></div>
+        </div>
+      </div></div>
+    </div>
+    <div class="col-md-8">
+      <div class="card border-0 mb-4"><div class="card-header fw-semibold"><i class="bi bi-info-circle me-2"></i>Employee Information</div><div class="card-body">
+        <div class="row g-3">
+          <div class="col-sm-6"><div style="color:#888;font-size:.78rem">Employee ID</div><div style="font-weight:500">EMP_003</div></div>
+          <div class="col-sm-6"><div style="color:#888;font-size:.78rem">Designation</div><div style="font-weight:500">Software Associate</div></div>
+          <div class="col-sm-6"><div style="color:#888;font-size:.78rem">Email</div><div style="font-weight:500">satbimeriise@mcehassan.ac.in</div></div>
+          <div class="col-sm-6"><div style="color:#888;font-size:.78rem">Phone</div><div style="font-weight:500">+91 98765 43212</div></div>
+          <div class="col-sm-6"><div style="color:#888;font-size:.78rem">Username</div><div style="font-weight:500">darshan</div></div>
+        </div>
+      </div></div>
+      <div class="card border-0"><div class="card-header fw-semibold"><i class="bi bi-shield-lock me-2"></i>Change Password</div><div class="card-body">
+        <div class="row g-3">
+          <div class="col-12"><label class="form-label small">Current Password</label><input type="password" class="form-control" value="Employee@123"></div>
+          <div class="col-sm-6"><label class="form-label small">New Password</label><input type="password" class="form-control" placeholder="Min 8 characters"></div>
+          <div class="col-sm-6"><label class="form-label small">Confirm Password</label><input type="password" class="form-control" placeholder="Repeat password"></div>
+        </div>
+        <button class="btn btn-primary mt-3" onclick="alert('Password updated! (Demo)')">Update Password</button>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /content-wrap -->
+
+<footer>
+  &copy; 2025 Technology Business Incubator – Malnad College of Engineering, Hassan &nbsp;|&nbsp; TBI-MCE Task Manager v1.0
+</footer>
+
+</div><!-- /appShell -->
+
+<!-- Add Employee Modal -->
+<div class="modal fade" id="addEmpModal" tabindex="-1">
+  <div class="modal-dialog modal-lg"><div class="modal-content border-0">
+    <div class="modal-header text-white" style="background:linear-gradient(135deg,#0d2b5c,#1565c0)">
+      <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Add New Employee</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label fw-semibold">Full Name *</label><input type="text" class="form-control" placeholder="Dr. / Mr. / Ms."></div>
+        <div class="col-md-6"><label class="form-label fw-semibold">Designation *</label><select class="form-select"><option>CEO</option><option>COO</option><option>Software Associate</option><option>Finance Associate</option><option>Innovation Associate</option><option>Supporting Staff</option></select></div>
+        <div class="col-md-6"><label class="form-label fw-semibold">Email *</label><input type="email" class="form-control" placeholder="name@tbi-mce.ac.in"></div>
+        <div class="col-md-6"><label class="form-label fw-semibold">Phone</label><input type="tel" class="form-control" placeholder="+91 XXXXX XXXXX"></div>
+        <div class="col-12"><label class="form-label fw-semibold">Photo URL</label><input type="url" class="form-control" placeholder="https://…"></div>
+        <div class="col-md-6"><label class="form-label fw-semibold">Username *</label><input type="text" class="form-control"></div>
+        <div class="col-md-6"><label class="form-label fw-semibold">Password *</label><input type="password" class="form-control" placeholder="Min 8 characters"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+      <button class="btn btn-primary" onclick="alert('Employee added! (Demo — in production saves to Google Sheets)');bootstrap.Modal.getInstance(document.getElementById(\'addEmpModal\')).hide()">Add Employee</button>
+    </div>
+  </div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+'use strict';
+
+// ── Sample Data ───────────────────────────────────────────────
+const EMPLOYEES = [
+  {id:'EMP_001',name:'Dr. Geetha Kiran A',  desig:'CEO',                  init:'GK',color:'linear-gradient(135deg,#b71c1c,#e53935)', email:'ceotbimeriise@mcehassan.ac.in', total:2,done:0,pending:2,overdue:0,pct:0},
+  {id:'EMP_002',name:'Dr. Mohana Lakshmi J',  desig:'COO',                  init:'MJ',color:'linear-gradient(135deg,#4a148c,#7b1fa2)', email:'cootbimeriise@mcehassan.ac.in',  total:2,done:2,pending:0,overdue:0,pct:50},
+  {id:'EMP_003',name:'Mr. Darshan H D',     desig:'Software Associate',   init:'DH',color:'linear-gradient(135deg,#0d2b5c,#1565c0)', email:'satbimeriise@mcehassan.ac.in',   total:3,done:3,pending:0,overdue:0,pct:67},
+  {id:'EMP_004',name:'Miss. Ramya K V',   desig:'Finance Associate',    init:'RV',color:'linear-gradient(135deg,#1b5e20,#2e7d32)', email:'fatbimeriise@mcehassan.ac.in',  total:3,done:1,pending:2,overdue:1,pct:33},
+  {id:'EMP_005',name:'Ms. Madhurya H V',  desig:'Innovation Associate', init:'MH',color:'linear-gradient(135deg,#e65100,#f57c00)', email:'iatbimeriise@mcehassan.ac.in', total:3,done:1,pending:1,overdue:1,pct:0},
+  {id:'EMP_006',name:'Ms. Deeksha M S',  desig:'Supporting Staff',     init:'DS',color:'linear-gradient(135deg,#006064,#00838f)', email:'sstbimeriise@mcehassan.ac.in', total:2,done:0,pending:2,overdue:1,pct:0},
+];
+
+const TASKS = [
+  {id:'TSK_001',emp:'EMP_003',title:'Develop TBI Website Homepage',      priority:'High',  assigned:'27 May 2025',deadline:'08 Jun 2025',days:0, status:'In Progress'},
+  {id:'TSK_002',emp:'EMP_003',title:'Fix Login Page Bug',                priority:'High',  assigned:'30 May 2025',deadline:'01 Jun 2025',days:0, status:'Completed'},
+  {id:'TSK_003',emp:'EMP_003',title:'Setup Cloud Hosting',               priority:'Medium',assigned:'22 May 2025',deadline:'25 May 2025',days:0, status:'Approved'},
+  {id:'TSK_004',emp:'EMP_004',title:'Prepare Monthly Budget Report',     priority:'High',  assigned:'29 May 2025',deadline:'01 Jun 2025',days:0, status:'Pending'},
+  {id:'TSK_005',emp:'EMP_004',title:'Process Startup Grant Applications',priority:'High',  assigned:'27 May 2025',deadline:'31 May 2025',days:1, status:'Pending'},
+  {id:'TSK_006',emp:'EMP_004',title:'Vendor Payment Processing',         priority:'Medium',assigned:'25 May 2025',deadline:'28 May 2025',days:0, status:'Approved'},
+  {id:'TSK_007',emp:'EMP_005',title:'Organize Innovation Workshop',      priority:'High',  assigned:'28 May 2025',deadline:'08 Jun 2025',days:0, status:'In Progress'},
+  {id:'TSK_008',emp:'EMP_005',title:'Startup Mentoring Sessions',        priority:'Medium',assigned:'26 May 2025',deadline:'01 Jun 2025',days:0, status:'Completed'},
+  {id:'TSK_009',emp:'EMP_005',title:'Research Report on AI Startups',    priority:'Low',   assigned:'18 May 2025',deadline:'25 May 2025',days:7, status:'Rejected'},
+  {id:'TSK_010',emp:'EMP_006',title:'Office Maintenance Schedule',       priority:'Low',   assigned:'29 May 2025',deadline:'08 Jun 2025',days:0, status:'Pending'},
+  {id:'TSK_011',emp:'EMP_006',title:'Visitor Management Setup',          priority:'Medium',assigned:'27 May 2025',deadline:'31 May 2025',days:1, status:'Pending'},
+  {id:'TSK_012',emp:'EMP_001',title:'Annual Report Preparation',         priority:'High',  assigned:'22 May 2025',deadline:'08 Jun 2025',days:0, status:'In Progress'},
+  {id:'TSK_013',emp:'EMP_002',title:'Team Performance Reviews',          priority:'High',  assigned:'29 May 2025',deadline:'08 Jun 2025',days:0, status:'Pending'},
+  {id:'TSK_014',emp:'EMP_002',title:'Policy Documentation Update',       priority:'Medium',assigned:'25 May 2025',deadline:'28 May 2025',days:0, status:'Approved'},
+];
+
+const empMap = {};
+EMPLOYEES.forEach(e => empMap[e.id] = e);
+
+// ── Login ─────────────────────────────────────────────────────
+let currentRole = 'admin';
+function doLogin() {
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value;
+  const admins   = ['admin','geetha','mohana'];
+  const employees= ['darshan','ramya','madhurya','deeksha'];
+  const err = document.getElementById('loginError');
+
+  if ([...admins,...employees].includes(u) && p.length >= 6) {
+    currentRole = admins.includes(u) ? 'admin' : 'employee';
+    document.getElementById('loginPage').style.display = 'none';
+    document.getElementById('appShell').style.display  = 'block';
+
+    if (currentRole === 'admin') {
+      document.getElementById('adminNav').style.display = '';
+      document.getElementById('empNav').style.display   = 'none';
+      document.getElementById('userNameNav').textContent = u==='mohana'?'Dr. Mohana Lakshmi J':'Dr. Geetha Kiran A';
+      document.getElementById('userInitials').textContent = u==='mohana'?'MJ':'GK';
+      document.getElementById('userRoleNav').textContent  = u==='mohana'?'COO – Admin':'CEO – Admin';
+      showPage('adminDash');
+    } else {
+      document.getElementById('adminNav').style.display = 'none';
+      document.getElementById('empNav').style.display   = '';
+      document.getElementById('userNameNav').textContent = u==='ramya'?'Miss. Ramya K V':u==='madhurya'?'Ms. Madhurya H V':u==='deeksha'?'Ms. Deeksha M S':'Mr. Darshan H D';
+      document.getElementById('userInitials').textContent = u.substring(0,2).toUpperCase();
+      document.getElementById('userRoleNav').textContent = u==='ramya'?'Finance Associate':u==='madhurya'?'Innovation Associate':u==='deeksha'?'Supporting Staff':'Software Associate';
+      showPage('empDash');
+    }
+    initCharts();
+    buildAllTables();
+  } else {
+    err.textContent = 'Invalid username or password.';
+    err.classList.remove('d-none');
+  }
+}
+function doLogout() {
+  document.getElementById('loginPage').style.display = '';
+  document.getElementById('appShell').style.display  = 'none';
+}
+document.getElementById('loginPass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+// ── Page navigation ────────────────────────────────────────────
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const el = document.getElementById('pg-'+id);
+  if (el) el.classList.add('active');
+  document.querySelectorAll('.tbi-navbar .nav-link').forEach(l => l.classList.remove('active'));
+  window.scrollTo(0,0);
+  if (id==='analytics') initAnalyticsCharts();
+}
+
+// ── Dark Mode ─────────────────────────────────────────────────
+function toggleDark() {
+  const html = document.documentElement;
+  const next = html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-bs-theme', next);
+  document.getElementById('themeIcon').className = next === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
+}
+
+// ── Notification panel ────────────────────────────────────────
+function toggleNotif() {
+  const p = document.getElementById('notifPanel');
+  p.style.display = p.style.display === 'none' ? '' : 'none';
+  document.getElementById('notifDot').style.display = 'none';
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('#notifPanel') && !e.target.closest('[onclick="toggleNotif()"]')) {
+    document.getElementById('notifPanel').style.display = 'none';
+  }
+});
+
+// ── Build Employee Cards ──────────────────────────────────────
+function buildEmpCards(container, clickFn) {
+  const el = document.getElementById(container);
+  if (!el) return;
+  el.innerHTML = EMPLOYEES.map(e => {
+    const pColor = e.pct>=70?'success':e.pct>=40?'warning':'danger';
+    return `<div class="col-12 col-sm-6 col-lg-4">
+      <div class="emp-card" onclick="${clickFn}('${e.id}')">
+        <div class="d-flex align-items-center gap-3 mb-3">
+          <div class="emp-avatar-init" style="background:${e.color}">${e.init}</div>
+          <div>
+            <div class="emp-name">${e.name}</div>
+            <div class="emp-desig">${e.desig}</div>
+          </div>
+        </div>
+        <div class="row g-2 text-center mb-3">
+          <div class="col-3"><div style="font-weight:700;color:var(--tbi-secondary)">${e.total}</div><div style="font-size:.62rem;color:#888;text-transform:uppercase">Total</div></div>
+          <div class="col-3"><div style="font-weight:700;color:#198754">${e.done}</div><div style="font-size:.62rem;color:#888;text-transform:uppercase">Done</div></div>
+          <div class="col-3"><div style="font-weight:700;color:#ffc107">${e.pending}</div><div style="font-size:.62rem;color:#888;text-transform:uppercase">Pending</div></div>
+          <div class="col-3"><div style="font-weight:700;color:#dc3545">${e.overdue}</div><div style="font-size:.62rem;color:#888;text-transform:uppercase">Overdue</div></div>
+        </div>
+        <div class="mb-1 d-flex justify-content-between"><small style="color:#888">Approval Rate</small><small style="font-weight:600;color:${e.pct>=70?'#198754':e.pct>=40?'#ffc107':'#dc3545'}">${e.pct}%</small></div>
+        <div class="progress"><div class="progress-bar bg-${pColor}" style="width:${e.pct}%"></div></div>
+        ${e.overdue>0?`<div class="mt-2"><span class="badge bg-danger bg-opacity-10 text-danger"><i class="bi bi-exclamation-circle me-1"></i>${e.overdue} overdue task${e.overdue>1?'s':''}</span></div>`:''}
+        <div class="emp-card-footer mt-2 pt-2" style="border-top:1px solid #e9ecef"><small style="color:#888"><i class="bi bi-envelope me-1"></i>${e.email}</small></div>
+      </div></div>`;
+  }).join('');
+}
+
+function buildAllTables() {
+  buildEmpCards('empCards', 'viewEmpTasks');
+  buildEmpCards('empMgmtCards', 'viewEmpTasks');
+  buildTaskTable('recentTasksTbody', TASKS.slice(0,6));
+  buildTaskTable('fullTasksTbody', TASKS);
+  buildReportTable();
+  buildMyTaskCards();
+}
+
+function viewEmpTasks(empId) { showPage('taskList'); }
+
+function buildTaskTable(tbodyId, tasks) {
+  const el = document.getElementById(tbodyId);
+  if (!el) return;
+  el.innerHTML = tasks.map((t,i) => {
+    const emp = empMap[t.emp];
+    const od = t.days > 0;
+    const pb = {High:'danger',Medium:'warning text-dark',Low:'success'}[t.priority]||'secondary';
+    const sb = {Pending:'secondary','In Progress':'primary',Completed:'info text-dark',Approved:'success',Rejected:'danger'}[t.status]||'secondary';
+    return `<tr class="${od?'overdue-row':''}">
+      <td style="color:#888;font-size:.8rem">${i+1}</td>
+      <td><div style="font-weight:500">${t.title}</div>${od?`<small style="color:#dc3545;font-size:.75rem"><i class="bi bi-exclamation-circle me-1"></i>Overdue ${t.days}d</small>`:''}</td>
+      <td><div style="font-size:.82rem;font-weight:500">${emp?.name||t.emp}</div><div style="font-size:.68rem;color:#888">${emp?.desig||''}</div></td>
+      <td><span class="badge bg-${pb}">${t.priority}</span></td>
+      <td style="font-size:.8rem">${t.assigned}</td>
+      <td style="font-size:.8rem;${od?'color:#dc3545;font-weight:600':''}">${t.deadline}</td>
+      <td>${t.days>0?`<span class="badge bg-danger">${t.days}d overdue</span>`:'<span class="text-muted" style="font-size:.8rem">—</span>'}</td>
+      <td><span class="badge bg-${sb}">${t.status}</span></td>
+      <td><button class="btn btn-xs btn-outline-primary me-1" onclick="alert('Edit task: ${t.title} (Demo)')" style="padding:.15rem .4rem;font-size:.72rem"><i class="bi bi-pencil"></i></button><button class="btn btn-xs btn-outline-secondary" onclick="showPage('createTask')" style="padding:.15rem .4rem;font-size:.72rem"><i class="bi bi-eye"></i></button></td>
+    </tr>`;
+  }).join('');
+}
+
+function buildReportTable() {
+  const el = document.getElementById('reportTbody');
+  if (!el) return;
+  el.innerHTML = TASKS.map((t,i) => {
+    const emp = empMap[t.emp];
+    const od = t.days > 0;
+    return `<tr class="${od?'overdue-row':''}">
+      <td>${i+1}</td><td>${t.title}</td><td>${emp?.name||t.emp}</td><td>${t.priority}</td>
+      <td>${t.assigned}</td><td>${t.deadline}</td><td>${t.days>0?t.days+'d':'—'}</td>
+      <td>${t.status}</td><td>Dr. Geetha Kiran A</td>
+    </tr>`;
+  }).join('');
+}
+
+function buildMyTaskCards() {
+  const el = document.getElementById('myTaskCards');
+  if (!el) return;
+  const myTasks = TASKS.filter(t => t.emp === 'EMP_003');
+  el.innerHTML = myTasks.map(t => {
+    const pb = {High:'danger',Medium:'warning text-dark',Low:'success'}[t.priority]||'secondary';
+    const sb = {Pending:'secondary','In Progress':'primary',Completed:'info text-dark',Approved:'success',Rejected:'danger'}[t.status]||'secondary';
+    const canAct = ['Pending','In Progress'].includes(t.status);
+    return `<div class="col-12 col-md-6 col-xl-4">
+      <div class="card border-0 h-100"><div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <h6 style="font-weight:600;font-size:.88rem;flex:1;margin-right:.5rem">${t.title}</h6>
+          <div class="d-flex gap-1 flex-shrink-0"><span class="badge bg-${pb}">${t.priority}</span><span class="badge bg-${sb}">${t.status}</span></div>
+        </div>
+        <div class="d-flex gap-3 mb-3" style="font-size:.78rem;color:#888">
+          <span><i class="bi bi-calendar-plus me-1"></i>${t.assigned}</span>
+          <span><i class="bi bi-calendar-x me-1"></i>${t.deadline}</span>
+        </div>
+        ${canAct?`<div class="d-flex gap-2 mt-2">${t.status==='Pending'?`<button class="btn btn-sm btn-outline-primary flex-fill" onclick="alert('Status: In Progress (Demo)')"><i class="bi bi-play me-1"></i>Start</button>`:''}
+          <button class="btn btn-sm btn-success flex-fill" onclick="alert('Submitted for approval! (Demo)')"><i class="bi bi-check2 me-1"></i>Mark Complete</button></div>`:''}
+        ${t.status==='Completed'?'<div class="alert alert-info py-1 small mt-2 mb-0"><i class="bi bi-clock me-1"></i>Awaiting admin approval…</div>':''}
+      </div></div></div>`;
+  }).join('');
+}
+
+// ── Filters ───────────────────────────────────────────────────
+function filterTasks() {
+  const q  = (document.getElementById('taskSearch')?.value||'').toLowerCase();
+  const se = document.getElementById('fEmp')?.value||'';
+  const ss = document.getElementById('fStatus')?.value||'';
+  const sp = document.getElementById('fPriority')?.value||'';
+  const filtered = TASKS.filter(t => {
+    const emp = empMap[t.emp];
+    if (se && emp?.name !== se) return false;
+    if (ss && t.status !== ss) return false;
+    if (sp && t.priority !== sp) return false;
+    if (q  && !t.title.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  buildTaskTable('fullTasksTbody', filtered);
+  document.getElementById('taskCount').textContent = `Showing ${filtered.length} of ${TASKS.length} tasks`;
+}
+function clearFilters() {
+  ['taskSearch','fEmp','fStatus','fPriority'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  filterTasks();
+}
+
+// ── Approval actions ──────────────────────────────────────────
+function approveTask(btn, title) {
+  if (!confirm(`Approve: "${title}"?`)) return;
+  const card = btn.closest('.col-12');
+  card.style.opacity = '0';
+  card.style.transition = 'opacity .4s';
+  setTimeout(() => { card.remove(); showToast(`Task "${title}" approved!`,'success'); }, 400);
+}
+function rejectTask(btn) {
+  const card = btn.closest('.col-12');
+  const ta = card.querySelector('textarea');
+  if (!ta.value.trim()) { ta.focus(); ta.style.borderColor='#dc3545'; return; }
+  if (!confirm('Reject this task?')) return;
+  card.style.opacity='0';card.style.transition='opacity .4s';
+  setTimeout(()=>{ card.remove(); showToast('Task rejected.','warning'); },400);
+}
+function showToast(msg,type='success') {
+  const t = document.createElement('div');
+  t.className=`alert alert-${type} shadow position-fixed`;
+  t.style.cssText='bottom:1.5rem;right:1.5rem;z-index:9999;padding:.75rem 1rem;border-radius:10px;min-width:250px;animation:fadeIn .3s ease';
+  t.innerHTML=`<i class="bi bi-${type==='success'?'check2-circle':'exclamation-circle'} me-2"></i>${msg}`;
+  document.body.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .4s';setTimeout(()=>t.remove(),400)},3000);
+}
+
+// ── Export helpers ────────────────────────────────────────────
+function exportTableExcel(tableId, filename) {
+  const tbl = document.getElementById(tableId);
+  if (!tbl){alert('Table not found');return;}
+  try{
+    const wb = XLSX.utils.table_to_book(tbl,{sheet:'Report'});
+    XLSX.writeFile(wb, filename+'_'+new Date().toISOString().split('T')[0]+'.xlsx');
+    showToast('Excel file downloaded!');
+  }catch(e){alert('Export error: '+e.message);}
+}
+function exportTablePDF(tableId, title) {
+  const tbl = document.getElementById(tableId);
+  if (!tbl){alert('Table not found');return;}
+  try{
+    const {jsPDF}=jspdf;
+    const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    doc.setFontSize(14);doc.setTextColor(13,43,92);
+    doc.text('TBI – MCE Hassan',15,15);
+    doc.setFontSize(11);doc.text(title,15,22);
+    doc.setFontSize(8);doc.setTextColor(120);
+    doc.text('Generated: '+new Date().toLocaleString('en-IN'),15,28);
+    doc.autoTable({html:'#'+tableId,startY:33,styles:{fontSize:8,cellPadding:2},headStyles:{fillColor:[13,43,92],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[240,244,255]}});
+    doc.save(title.replace(/\s+/g,'_')+'_'+new Date().toISOString().split('T')[0]+'.pdf');
+    showToast('PDF downloaded!');
+  }catch(e){alert('PDF export error: '+e.message);}
+}
+
+// ── Charts ────────────────────────────────────────────────────
+let chartsInit = false;
+let analyticsInit = false;
+
+function initCharts() {
+  if (chartsInit) return; chartsInit=true;
+  // Dashboard doughnut
+  new Chart(document.getElementById('distChart'),{type:'doughnut',
+    data:{labels:['Approved','Completed','In Progress','Pending','Rejected'],
+    datasets:[{data:[4,6,3,6,1],backgroundColor:['#198754','#0dcaf0','#0d6efd','#ffc107','#dc3545'],borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:11,padding:8,font:{size:11}}}}}
+  });
+  // Dashboard bar
+  new Chart(document.getElementById('perfChart'),{type:'bar',
+    data:{labels:['Dr. Geetha','Dr. Mohana','Mr. Darshan','Miss. Ramya','Ms. Madhurya','Ms. Deeksha'],
+    datasets:[
+      {label:'Total',    data:[2,2,3,3,3,2],backgroundColor:'rgba(13,110,253,.7)'},
+      {label:'Completed',data:[0,2,3,1,1,0],backgroundColor:'rgba(25,135,84,.7)'},
+      {label:'Pending',  data:[2,0,0,2,1,2],backgroundColor:'rgba(255,193,7,.7)'},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}
+  });
+  // Employee personal doughnut
+  const ec = document.getElementById('myTaskChart');
+  if(ec) new Chart(ec,{type:'doughnut',
+    data:{labels:['Approved','In Progress','Pending'],datasets:[{data:[1,1,1],backgroundColor:['#198754','#0d6efd','#ffc107'],borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:6,font:{size:10}}}}}
+  });
+}
+
+function initAnalyticsCharts() {
+  if (analyticsInit) return; analyticsInit=true;
+  new Chart(document.getElementById('monthlyChart'),{type:'line',
+    data:{labels:['Jan 2025','Feb 2025','Mar 2025','Apr 2025','May 2025','Jun 2025'],
+    datasets:[
+      {label:'Total Assigned',data:[4,6,3,7,8,14],borderColor:'#0d6efd',backgroundColor:'rgba(13,110,253,.1)',tension:.35,fill:true},
+      {label:'Completed',     data:[2,5,3,4,5,6], borderColor:'#198754',backgroundColor:'rgba(25,135,84,.1)', tension:.35,fill:true},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,ticks:{stepSize:2}}}}
+  });
+  new Chart(document.getElementById('priorityChart'),{type:'doughnut',
+    data:{labels:['High','Medium','Low'],datasets:[{data:[7,5,2],backgroundColor:['#dc3545','#ffc107','#198754']}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}
+  });
+  new Chart(document.getElementById('statusChart'),{type:'pie',
+    data:{labels:['Pending','In Progress','Completed','Approved','Rejected'],
+    datasets:[{data:[4,3,2,4,1],backgroundColor:['#6c757d','#0d6efd','#0dcaf0','#198754','#dc3545']}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right'}}}
+  });
+  new Chart(document.getElementById('empLoadChart'),{type:'bar',
+    data:{labels:['Dr. Geetha','Dr. Mohana','Mr. Darshan','Miss. Ramya','Ms. Madhurya','Ms. Deeksha'],
+    datasets:[
+      {label:'Total',     data:[2,2,3,3,3,2],backgroundColor:'rgba(13,110,253,.7)'},
+      {label:'Completed', data:[0,2,3,1,1,0],backgroundColor:'rgba(25,135,84,.7)'},
+      {label:'Pending',   data:[2,0,0,2,1,2],backgroundColor:'rgba(255,193,7,.7)'},
+    ]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{beginAtZero:true}}}
+  });
+}
+
+function togglePwd() {
+  const f=document.getElementById('pwdField'),e=document.getElementById('pwdEye');
+  if(f.type==='password'){f.type='text';e.className='bi bi-eye-slash';}
+  else{f.type='password';e.className='bi bi-eye';}
+}
+</script>
+</body>
+</html>

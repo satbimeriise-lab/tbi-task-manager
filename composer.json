@@ -1,0 +1,15 @@
+{
+    "name": "tbi-mce/task-manager",
+    "description": "TBI-MCE Hassan Task Management and Monitoring System",
+    "type": "project",
+    "require": {
+        "php": ">=8.0",
+        "google/apiclient": "^2.15",
+        "phpoffice/phpspreadsheet": "^1.29",
+        "tecnickcom/tcpdf": "^6.6",
+        "phpmailer/phpmailer": "^6.8"
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}
