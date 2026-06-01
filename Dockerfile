@@ -20,8 +20,9 @@ WORKDIR /var/www/html
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-# Enable Apache modules
-RUN a2enmod rewrite headers deflate
+# Fix MPM conflict: disable event/worker, keep prefork (required for PHP)
+RUN a2dismod mpm_event mpm_worker 2>/dev/null || true \
+    && a2enmod mpm_prefork rewrite headers deflate
 
 # Apache virtualhost — use port 80 here; start.sh swaps it to $PORT at runtime
 RUN echo '<VirtualHost *:80>\n\
