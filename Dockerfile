@@ -1,13 +1,17 @@
 FROM php:8.2-apache
 
-# System dependencies
+# System dependencies + PHP extensions needed by the project
 RUN apt-get update && apt-get install -y \
-    git zip unzip libzip-dev libcurl4-openssl-dev \
-    && docker-php-ext-install zip curl \
+    git zip unzip \
+    libzip-dev libpng-dev libxml2-dev libcurl4-openssl-dev \
+    libfreetype6-dev libjpeg62-turbo-dev libonig-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install \
+        zip gd xml mbstring curl opcache \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install Composer
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+# Copy Composer binary from official image (faster than installer)
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # Copy project files
 COPY . /var/www/html/
@@ -16,12 +20,11 @@ WORKDIR /var/www/html
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-# Apache: enable mod_rewrite
-RUN a2enmod rewrite headers deflate expires
+# Enable Apache modules
+RUN a2enmod rewrite headers deflate
 
-# Apache virtual host — listens on $PORT (set by Railway/Render at runtime)
-RUN echo '\
-<VirtualHost *:${PORT}>\n\
+# Apache virtualhost — use port 80 here; start.sh swaps it to $PORT at runtime
+RUN echo '<VirtualHost *:80>\n\
     DocumentRoot /var/www/html\n\
     <Directory /var/www/html>\n\
         AllowOverride All\n\
@@ -32,16 +35,16 @@ RUN echo '\
     CustomLog ${APACHE_LOG_DIR}/access.log combined\n\
 </VirtualHost>' > /etc/apache2/sites-available/000-default.conf
 
-# Set file permissions
-RUN chown -R www-data:www-data /var/www/html \
-    && find /var/www/html -type f -name "*.php" -exec chmod 644 {} \; \
-    && find /var/www/html -type d -exec chmod 755 {} \; \
-    && mkdir -p /var/www/html/uploads \
+# Suppress ServerName warning
+RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
+
+# Ensure uploads directory exists and is writable
+RUN mkdir -p /var/www/html/uploads \
+    && chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html \
     && chmod 777 /var/www/html/uploads
 
-# Startup script — sets Apache port from $PORT env var
-COPY docker/start.sh /start.sh
-RUN chmod +x /start.sh
+# Make start script executable
+RUN chmod +x /var/www/html/docker/start.sh
 
-EXPOSE ${PORT:-80}
-CMD ["/start.sh"]
+CMD ["/var/www/html/docker/start.sh"]
